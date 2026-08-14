@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "functions": {
+    "api/aircraft.js": {
+      "maxDuration": 10
+    }
+  }
+}
