@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         "User-Agent": "PlaneHunter-Prototype"
       },
       cache: "no-store"
-ex    });
+    });
 
     if (!r.ok) {
       throw new Error(`OpenSky HTTP ${r.status}`);
