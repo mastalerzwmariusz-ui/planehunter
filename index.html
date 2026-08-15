@@ -3,62 +3,367 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>PlaneHunter v0.5</title>
+<title>PlaneHunter v0.6</title>
 <style>
-:root{color-scheme:dark}*{box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;background:#08101f;color:#eef;margin:0;padding:20px}
-.wrap{max-width:920px;margin:auto}.card{background:#121c33;border:1px solid #2a3a62;border-radius:18px;padding:18px;margin:12px 0}
-.row{display:flex;gap:10px;flex-wrap:wrap}input,button{font-size:16px;padding:13px;border-radius:12px;border:1px solid #46577d;background:#0b1428;color:white}
-input{min-width:150px;flex:1}button{cursor:pointer;background:#3155ff;font-weight:800}button:disabled{opacity:.55}
-.score{font-size:26px;font-weight:900}.hot{color:#ff7043}.rare{color:#ffca28}.common{color:#b0bec5}
-.muted{color:#9aa8c9}.small{font-size:13px}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#263552;margin:4px 6px 0 0}
-.err{border-color:#7f1d1d;background:#2a1418}.ok{border-color:#1d5c37;background:#10261a}
-h1{margin:0 0 5px;font-size:42px}h2{margin:8px 0}
-@media(max-width:600px){body{padding:14px}h1{font-size:34px}input{width:100%;min-width:100%}button{flex:1}}
+:root{
+  color-scheme:dark;
+  --bg:#07101f;--panel:#111b31;--line:#2e4069;
+  --text:#f4f7ff;--muted:#98a7c8;--blue:#3155ff;
+  --hot:#ff604d;--rare:#ffc928;--common:#aab5cc;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:18px;
+  background:linear-gradient(180deg,#08101f 0%,#050b16 100%);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+.wrap{max-width:920px;margin:auto}
+.hero{margin:8px 0 18px}
+h1{margin:0;font-size:42px;line-height:1.05}
+.subtitle{color:var(--muted);margin-top:8px;font-size:17px}
+.card{
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:20px;padding:18px;margin:14px 0;
+}
+.controls{display:grid;grid-template-columns:1fr 1fr .55fr;gap:10px}
+input,button{font:inherit;border-radius:13px;border:1px solid #465a87;padding:14px}
+input{background:#091327;color:white;min-width:0}
+button{background:var(--blue);color:white;font-weight:800;cursor:pointer}
+button:disabled{opacity:.55}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.small{font-size:13px}.muted{color:var(--muted)}
+.status.ok{border-color:#1f6e45;background:#0d2b1c}
+.status.err{border-color:#7f2828;background:#2a1418}
+.summary{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.scoreline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:26px;font-weight:900}
+.score.hot{color:var(--hot)}
+.score.rare{color:var(--rare)}
+.score.common{color:var(--common)}
+.badge{
+  display:inline-block;border-radius:999px;padding:6px 10px;
+  background:#243553;margin:5px 6px 0 0;font-size:15px;
+}
+.reason{margin-top:12px;padding-top:12px;border-top:1px solid #263856;color:#c3cce0}
+.aircraft h2{font-size:30px;margin:8px 0 4px}
+.topline{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.dim{opacity:.72}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.filter{
+  background:#16233d;border:1px solid #334b78;color:#dce5ff;
+  padding:9px 11px;border-radius:999px;font-size:14px;font-weight:700;
+}
+.filter.active{background:#2948d8}
+@media(max-width:650px){
+  body{padding:13px}h1{font-size:35px}
+  .controls{grid-template-columns:1fr}
+  .actions{grid-template-columns:1fr 1fr}
+  .scoreline{font-size:22px}.aircraft h2{font-size:26px}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>✈ PlaneHunter v0.5</h1>
-<div class="muted">Live aircraft nearby → ranked by “worth looking up”.</div>
-<div class="card">
-<div class="row">
-<input id="lat" inputmode="decimal" placeholder="Latitude" value="51.11582">
-<input id="lon" inputmode="decimal" placeholder="Longitude" value="-0.22452">
-<input id="radius" inputmode="numeric" type="number" value="40" min="5" max="150">
-<button id="loc">Use my location</button>
-<button id="hunt">HUNT ✈</button>
+  <div class="hero">
+    <h1>✈ PlaneHunter v0.6</h1>
+    <div class="subtitle">Live aircraft nearby → ranked by “is it worth looking up?”</div>
+  </div>
+
+  <div class="card">
+    <div class="controls">
+      <input id="lat" inputmode="decimal" placeholder="Latitude" value="51.11582">
+      <input id="lon" inputmode="decimal" placeholder="Longitude" value="-0.22452">
+      <input id="radius" inputmode="numeric" type="number" min="5" max="150" value="40">
+    </div>
+
+    <div class="actions">
+      <button id="loc">Use my location</button>
+      <button id="hunt">HUNT ✈</button>
+    </div>
+
+    <div class="filters">
+      <button class="filter active" data-filter="all">ALL</button>
+      <button class="filter" data-filter="airborne">AIRBORNE</button>
+      <button class="filter" data-filter="interesting">INTERESTING+</button>
+    </div>
+
+    <p class="muted small">Radius in km. Live data via PlaneHunter API. Ground traffic is heavily penalised.</p>
+  </div>
+
+  <div id="status"></div>
+  <div id="results"></div>
 </div>
-<p class="muted small">Radius in km. Live data comes through the PlaneHunter server endpoint.</p>
-</div>
-<div id="status"></div><div id="results"></div>
-</div>
+
 <script>
-const specialTypes=new Set(["A388","A124","A225","BLCF","A3ST","C17","A400","B52","B1","B2","U2","AN12","IL76"]);
-const specialCalls=[/BELUGA/i,/ANTONOV|ADB/i,/NASA/i,/RAF|RFR/i,/USAF|RCH/i,/RRR/i,/NATO/i];
-function hav(a,b,c,d){const R=6371,p=Math.PI/180,da=(c-a)*p,dl=(d-b)*p;const x=Math.sin(da/2)**2+Math.cos(a*p)*Math.cos(c*p)*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
-function score(ac,dist){let s=10;const alt=Number.isFinite(ac.alt_ft)?ac.alt_ft:50000,call=(ac.callsign||"").trim(),type=(ac.type||"").toUpperCase();
-if(dist<8)s+=25;else if(dist<15)s+=20;else if(dist<25)s+=13;else if(dist<40)s+=7;
-if(alt<5000)s+=20;else if(alt<12000)s+=14;else if(alt<22000)s+=8;else if(alt<32000)s+=3;
-if(specialTypes.has(type))s+=35;if(specialCalls.some(r=>r.test(call)))s+=30;if((ac.dbFlags||0)&1)s+=18;
-if(Number.isFinite(ac.vertical_fpm)&&Math.abs(ac.vertical_fpm)>1500)s+=5;return Math.min(99,s);}
-function label(s){return s>=80?["🔥 DROP EVERYTHING","hot"]:s>=55?["⭐ INTERESTING","rare"]:["COMMON","common"];}
-const lat=document.getElementById("lat"),lon=document.getElementById("lon"),radius=document.getElementById("radius"),status=document.getElementById("status"),results=document.getElementById("results"),hunt=document.getElementById("hunt");
-document.getElementById("loc").onclick=()=>{if(!navigator.geolocation){alert("Geolocation not supported");return;}
-navigator.geolocation.getCurrentPosition(p=>{lat.value=p.coords.latitude.toFixed(5);lon.value=p.coords.longitude.toFixed(5)},e=>alert("Location unavailable: "+e.message),{enableHighAccuracy:true,timeout:10000,maximumAge:30000});};
-hunt.onclick=async()=>{results.innerHTML="";status.innerHTML='<div class="card">Scanning…</div>';hunt.disabled=true;
-const la=Number(lat.value),lo=Number(lon.value),r=Number(radius.value);if(!Number.isFinite(la)||!Number.isFinite(lo)){status.innerHTML='<div class="card err">Invalid coordinates.</div>';hunt.disabled=false;return;}
-const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),10000);
-try{const res=await fetch(`/api/aircraft?lat=${encodeURIComponent(la)}&lon=${encodeURIComponent(lo)}&radius=${encodeURIComponent(r)}`,{signal:controller.signal,cache:"no-store"});
-const text=await res.text();let data;try{data=JSON.parse(text)}catch{throw new Error(`Server returned non-JSON response (${res.status})`)}
-if(!res.ok)throw new Error(data.error||`HTTP ${res.status}`);
-const arr=(data.aircraft||[]).filter(a=>Number.isFinite(a.lat)&&Number.isFinite(a.lon)).map(a=>({a,d:hav(la,lo,a.lat,a.lon)})).filter(x=>x.d<=r).map(x=>({...x,s:score(x.a,x.d)})).sort((x,y)=>y.s-x.s).slice(0,30);
-status.innerHTML=`<div class="card ok"><b>${arr.length}</b> targets • source: ${data.source||"unknown"} • ${new Date().toLocaleTimeString()}</div>`;
-results.innerHTML=arr.map(x=>{const a=x.a,[lab,cl]=label(x.s),call=(a.callsign||"UNKNOWN").trim()||"UNKNOWN",reg=a.registration||"—",type=a.type||"—";
-const alt=Number.isFinite(a.alt_ft)?Math.round(a.alt_ft).toLocaleString()+" ft":"—",spd=Number.isFinite(a.speed_kt)?Math.round(a.speed_kt)+" kt":"—",vr=Number.isFinite(a.vertical_fpm)?Math.round(a.vertical_fpm)+" ft/min":"—";
-return `<div class="card"><div class="score ${cl}">${x.s}/100 · ${lab}</div><h2>${call}</h2><span class="pill">${type}</span><span class="pill">${reg}</span><span class="pill">${x.d.toFixed(1)} km</span><span class="pill">${alt}</span><span class="pill">${spd}</span><p class="muted">ICAO: ${a.icao||"—"} · Track: ${Number.isFinite(a.track_deg)?Math.round(a.track_deg)+"°":"—"} · Vertical: ${vr}</p></div>`;}).join("")||'<div class="card">No aircraft found in this radius right now.</div>';
-}catch(e){const msg=e.name==="AbortError"?"Request timed out after 10 seconds":e.message;status.innerHTML=`<div class="card err"><b>Could not fetch live data.</b><br>${msg}</div>`;}
-finally{clearTimeout(timer);hunt.disabled=false;}};
+const specialTypes=new Map([
+["A388",35],["A124",50],["A225",60],["BLCF",50],["A3ST",50],
+["C17",42],["A400",42],["B52",50],["B1",50],["B2",55],["U2",55],
+["AN12",35],["IL76",38],["MD11",28],["DC10",35],["B744",25],
+["B748",30],["CONC",60],["VULC",55],["SR71",60],["GLEX",8]
+]);
+
+const commonTypes=new Set([
+"A319","A320","A321","A20N","A21N",
+"B737","B738","B739","B38M","B39M",
+"E190","E195","E290","E295"
+]);
+
+const specialCalls=[
+{r:/BELUGA/i,p:35,t:"Beluga"},
+{r:/ANTONOV|ADB/i,p:35,t:"Antonov"},
+{r:/NASA/i,p:40,t:"NASA"},
+{r:/RAF|RFR|RRR/i,p:30,t:"RAF"},
+{r:/USAF|RCH/i,p:30,t:"USAF"},
+{r:/NATO/i,p:28,t:"NATO"},
+{r:/POLICE|NPAS/i,p:25,t:"Police"}
+];
+
+function hav(lat1,lon1,lat2,lon2){
+ const R=6371,p=Math.PI/180;
+ const dLat=(lat2-lat1)*p,dLon=(lon2-lon1)*p;
+ const a=Math.sin(dLat/2)**2+
+ Math.cos(lat1*p)*Math.cos(lat2*p)*Math.sin(dLon/2)**2;
+ return 2*R*Math.asin(Math.sqrt(a));
+}
+
+function bearing(lat1,lon1,lat2,lon2){
+ const p=Math.PI/180;
+ const y=Math.sin((lon2-lon1)*p)*Math.cos(lat2*p);
+ const x=Math.cos(lat1*p)*Math.sin(lat2*p)-
+ Math.sin(lat1*p)*Math.cos(lat2*p)*Math.cos((lon2-lon1)*p);
+ return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+
+function angleDiff(a,b){
+ let d=Math.abs(a-b)%360;
+ return d>180?360-d:d;
+}
+
+function classify(ac,dist,userLat,userLon){
+ let s=8;
+ const reasons=[];
+ const alt=Number.isFinite(ac.alt_ft)?ac.alt_ft:null;
+ const spd=Number.isFinite(ac.speed_kt)?ac.speed_kt:null;
+ const trk=Number.isFinite(ac.track_deg)?ac.track_deg:null;
+ const vr=Number.isFinite(ac.vertical_fpm)?ac.vertical_fpm:null;
+ const type=(ac.type||"").toUpperCase();
+ const call=(ac.callsign||"").trim();
+ const onGround=alt===0&&(spd===null||spd<45);
+
+ if(onGround){s-=35;reasons.push("on ground")}
+
+ if(dist<5){s+=18;reasons.push("very close")}
+ else if(dist<10){s+=14;reasons.push("close")}
+ else if(dist<20){s+=9}
+ else if(dist<35){s+=4}
+
+ if(alt!==null&&alt>0){
+   if(alt<4000){s+=22;reasons.push("very low")}
+   else if(alt<9000){s+=16;reasons.push("low")}
+   else if(alt<16000){s+=10}
+   else if(alt<25000){s+=5}
+ }
+
+ if(spd!==null){
+   if(spd>80)s+=5;
+   if(spd>250)s+=2;
+ }
+
+ if(vr!==null){
+   if(vr<-1200){s+=7;reasons.push("descending fast")}
+   else if(vr>1500){s+=5;reasons.push("climbing fast")}
+ }
+
+ if(trk!==null&&Number.isFinite(userLat)&&Number.isFinite(userLon)){
+   const toUser=bearing(ac.lat,ac.lon,userLat,userLon);
+   const d=angleDiff(trk,toUser);
+   if(d<25&&!onGround){s+=12;reasons.push("heading toward you")}
+   else if(d<45&&!onGround)s+=6;
+ }
+
+ if(specialTypes.has(type)){
+   s+=specialTypes.get(type);
+   reasons.push(`special type ${type}`);
+ }else if(commonTypes.has(type)){
+   s-=8;
+   reasons.push("common type");
+ }
+
+ for(const item of specialCalls){
+   if(item.r.test(call)){
+     s+=item.p;
+     reasons.push(item.t);
+     break;
+   }
+ }
+
+ if((ac.dbFlags||0)!==0)s+=6;
+
+ s=Math.max(0,Math.min(99,Math.round(s)));
+
+ let label,cls;
+ if(s>=80){label="🔥 DROP EVERYTHING";cls="hot"}
+ else if(s>=55){label="⭐ INTERESTING";cls="rare"}
+ else{label="COMMON";cls="common"}
+
+ return{score:s,label,cls,onGround,reasons};
+}
+
+let lastData=[];
+let currentFilter="all";
+
+const lat=document.getElementById("lat");
+const lon=document.getElementById("lon");
+const radius=document.getElementById("radius");
+const status=document.getElementById("status");
+const results=document.getElementById("results");
+const hunt=document.getElementById("hunt");
+
+document.querySelectorAll(".filter").forEach(btn=>{
+ btn.onclick=()=>{
+   document.querySelectorAll(".filter").forEach(x=>x.classList.remove("active"));
+   btn.classList.add("active");
+   currentFilter=btn.dataset.filter;
+   render(lastData);
+ };
+});
+
+document.getElementById("loc").onclick=()=>{
+ if(!navigator.geolocation){
+   alert("Geolocation not supported");
+   return;
+ }
+ navigator.geolocation.getCurrentPosition(
+   p=>{
+     lat.value=p.coords.latitude.toFixed(5);
+     lon.value=p.coords.longitude.toFixed(5);
+   },
+   e=>alert("Location unavailable: "+e.message),
+   {enableHighAccuracy:true,timeout:10000,maximumAge:30000}
+ );
+};
+
+hunt.onclick=async()=>{
+ const la=Number(lat.value);
+ const lo=Number(lon.value);
+ const r=Number(radius.value);
+
+ if(!Number.isFinite(la)||!Number.isFinite(lo)){
+   status.innerHTML='<div class="card status err">Invalid coordinates.</div>';
+   return;
+ }
+
+ hunt.disabled=true;
+ status.innerHTML='<div class="card">Scanning live traffic…</div>';
+ results.innerHTML="";
+
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),10000);
+
+ try{
+   const res=await fetch(
+     `/api/aircraft?lat=${encodeURIComponent(la)}&lon=${encodeURIComponent(lo)}&radius=${encodeURIComponent(r)}`,
+     {signal:controller.signal,cache:"no-store"}
+   );
+
+   const text=await res.text();
+   let data;
+   try{data=JSON.parse(text)}
+   catch{throw new Error(`Non-JSON server response (${res.status})`)}
+
+   if(!res.ok)throw new Error(data.error||`HTTP ${res.status}`);
+
+   lastData=(data.aircraft||[])
+   .filter(a=>Number.isFinite(a.lat)&&Number.isFinite(a.lon))
+   .map(a=>{
+     const d=hav(la,lo,a.lat,a.lon);
+     return{a,d,c:classify(a,d,la,lo)};
+   })
+   .filter(x=>x.d<=r)
+   .sort((x,y)=>y.c.score-x.c.score||x.d-y.d);
+
+   const airborne=lastData.filter(x=>!x.c.onGround).length;
+   const interesting=lastData.filter(x=>x.c.score>=55).length;
+
+   status.innerHTML=
+   `<div class="card status ok">
+     <div class="summary">
+       <div><b>${lastData.length}</b> targets • source: ${data.source||"unknown"}</div>
+       <div class="muted">${airborne} airborne • ${interesting} interesting+</div>
+     </div>
+   </div>`;
+
+   render(lastData);
+
+ }catch(e){
+   const msg=e.name==="AbortError"?
+   "Request timed out after 10 seconds":e.message;
+
+   status.innerHTML=
+   `<div class="card status err">
+   <b>Could not fetch live data.</b><br>${msg}</div>`;
+ }finally{
+   clearTimeout(timer);
+   hunt.disabled=false;
+ }
+};
+
+function render(arr){
+ let filtered=arr;
+
+ if(currentFilter==="airborne"){
+   filtered=arr.filter(x=>!x.c.onGround);
+ }else if(currentFilter==="interesting"){
+   filtered=arr.filter(x=>x.c.score>=55);
+ }
+
+ results.innerHTML=filtered.map(x=>{
+   const a=x.a,c=x.c;
+   const call=(a.callsign||"UNKNOWN").trim()||"UNKNOWN";
+   const reg=a.registration||"—";
+   const type=a.type||"—";
+   const alt=Number.isFinite(a.alt_ft)?
+     Math.round(a.alt_ft).toLocaleString()+" ft":"—";
+   const spd=Number.isFinite(a.speed_kt)?
+     Math.round(a.speed_kt)+" kt":"—";
+   const trk=Number.isFinite(a.track_deg)?
+     Math.round(a.track_deg)+"°":"—";
+   const vr=Number.isFinite(a.vertical_fpm)?
+     Math.round(a.vertical_fpm)+" ft/min":"—";
+   const reason=c.reasons.length?
+     c.reasons.join(" • "):"No special factors";
+
+   return`
+   <div class="card aircraft ${c.onGround?'dim':''}">
+     <div class="topline">
+       <div>
+         <div class="scoreline">
+           <span class="score ${c.cls}">${c.score}/100</span>
+           <span>${c.label}</span>
+         </div>
+         <h2>${call}</h2>
+       </div>
+     </div>
+
+     <div>
+       <span class="badge">${type}</span>
+       <span class="badge">${reg}</span>
+       <span class="badge">${x.d.toFixed(1)} km</span>
+       <span class="badge">${alt}</span>
+       <span class="badge">${spd}</span>
+     </div>
+
+     <p class="muted">
+       ICAO: ${a.icao||"—"} · Track: ${trk} · Vertical: ${vr}
+     </p>
+
+     <div class="reason">
+       <b>Why:</b> ${reason}
+     </div>
+   </div>`;
+ }).join("")||
+ '<div class="card">Nothing matches this filter right now.</div>';
+}
 </script>
 </body>
 </html>
