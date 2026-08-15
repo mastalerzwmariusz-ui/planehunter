@@ -1,123 +1,120 @@
 export default async function handler(req, res) {
-
-  // CORS + no-cache
-
-  res.setHeader("Access-Control-Allow-Origin", "*");
-
   res.setHeader("Cache-Control", "no-store");
 
   const lat = Number(req.query.lat);
-
   const lon = Number(req.query.lon);
-
-  const radius = Math.max(
-
+  const radiusKm = Math.max(
     5,
-
     Math.min(150, Number(req.query.radius) || 40)
-
   );
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-
     return res.status(400).json({
-
       error: "Invalid latitude or longitude"
-
     });
-
   }
 
-  // Convert radius to approximate bounding box
+  const radiusNm = Math.max(
+    1,
+    Math.min(250, Math.ceil(radiusKm / 1.852))
+  );
 
-  const dLat = radius / 111;
+  const providers = [
+    {
+      name: "ADSB.lol",
+      url: `https://api.adsb.lol/v2/lat/${lat}/lon/${lon}/dist/${radiusNm}`
+    },
+    {
+      name: "adsb.fi",
+      url: `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/${radiusNm}`
+    }
+  ];
 
-  const cosLat = Math.cos((lat * Math.PI) / 180);
+  let lastError = "No provider available";
 
-  const dLon = radius / (111 * Math.max(0.1, Math.abs(cosLat)));
+  for (const provider of providers) {
+    const controller = new AbortController();
 
-  const lamin = lat - dLat;
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 6500);
 
-  const lamax = lat + dLat;
-
-  const lomin = lon - dLon;
-
-  const lomax = lon + dLon;
-
-  const url =
-
-    "https://opensky-network.org/api/states/all" +
-
-    `?lamin=${encodeURIComponent(lamin)}` +
-
-    `&lomin=${encodeURIComponent(lomin)}` +
-
-    `&lamax=${encodeURIComponent(lamax)}` +
-
-    `&lomax=${encodeURIComponent(lomax)}`;
-
-  try {
-
-    const response = await fetch(url, {
-
-      headers: {
-
-        "User-Agent": "PlaneHunter/0.5",
-
-        "Accept": "application/json"
-
-      },
-
-      cache: "no-store"
-
-    });
-
-    if (!response.ok) {
-
-      const body = await response.text();
-
-      return res.status(502).json({
-
-        error: "Aircraft data provider error",
-
-        providerStatus: response.status,
-
-        details: body.slice(0, 300)
-
+    try {
+      const response = await fetch(provider.url, {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "PlaneHunter/0.5"
+        },
+        signal: controller.signal,
+        cache: "no-store"
       });
 
+      if (!response.ok) {
+        throw new Error(
+          `${provider.name} HTTP ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      const raw = Array.isArray(data.ac)
+        ? data.ac
+        : [];
+
+      const aircraft = raw
+        .filter(
+          a =>
+            Number.isFinite(Number(a.lat)) &&
+            Number.isFinite(Number(a.lon))
+        )
+        .map(a => ({
+          icao: a.hex || null,
+          callsign: (a.flight || "").trim(),
+          registration: a.r || null,
+          type: a.t || null,
+          lat: Number(a.lat),
+          lon: Number(a.lon),
+          alt_ft:
+            a.alt_baro === "ground"
+              ? 0
+              : finiteOrNull(a.alt_baro),
+          speed_kt: finiteOrNull(a.gs),
+          track_deg: finiteOrNull(a.track),
+          vertical_fpm: finiteOrNull(a.baro_rate),
+          squawk: a.squawk || null,
+          category: a.category || null,
+          dbFlags: finiteOrZero(a.dbFlags)
+        }));
+
+      return res.status(200).json({
+        source: provider.name,
+        count: aircraft.length,
+        radius_km: radiusKm,
+        aircraft
+      });
+
+    } catch (error) {
+      lastError =
+        error?.name === "AbortError"
+          ? `${provider.name} timed out`
+          : error?.message || `${provider.name} failed`;
+
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const data = await response.json();
-
-    const states = Array.isArray(data.states)
-
-      ? data.states
-
-      : [];
-
-    return res.status(200).json({
-
-      ok: true,
-
-      time: data.time || null,
-
-      count: states.length,
-
-      states
-
-    });
-
-  } catch (error) {
-
-    return res.status(500).json({
-
-      error: "Unable to fetch aircraft data",
-
-      details: String(error?.message || error)
-
-    });
-
   }
 
+  return res.status(502).json({
+    error: lastError
+  });
+}
+
+function finiteOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function finiteOrZero(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
