@@ -3,103 +3,62 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>PlaneHunter v0.3.1</title>
+<title>PlaneHunter v0.5</title>
 <style>
-:root{color-scheme:dark}
-body{font-family:-apple-system,BlinkMacSystemFont,system-ui;background:#0b1020;color:#eef;margin:0;padding:20px}
-.wrap{max-width:920px;margin:auto}.card{background:#151d33;border:1px solid #2b3659;border-radius:18px;padding:18px;margin:12px 0}
-.row{display:flex;gap:10px;flex-wrap:wrap}input,button{font-size:16px;padding:13px;border-radius:11px;border:1px solid #465270;background:#0e162a;color:white}
-button{cursor:pointer;background:#304ffe;font-weight:700}.secondary{background:#263452}.score{font-size:27px;font-weight:800}
-.hot{color:#ff7043}.rare{color:#ffca28}.common{color:#b0bec5}.muted{color:#9aa6c4}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#263452;margin:4px 6px 0 0}
-.err{border-color:#7f1d1d;background:#2a1418}.ok{border-color:#1d5c37}.small{font-size:13px}
-h1{margin-bottom:5px}h2{margin-bottom:8px}
-@media(max-width:600px){input{width:100%;box-sizing:border-box}button{flex:1}}
+:root{color-scheme:dark}*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;background:#08101f;color:#eef;margin:0;padding:20px}
+.wrap{max-width:920px;margin:auto}.card{background:#121c33;border:1px solid #2a3a62;border-radius:18px;padding:18px;margin:12px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap}input,button{font-size:16px;padding:13px;border-radius:12px;border:1px solid #46577d;background:#0b1428;color:white}
+input{min-width:150px;flex:1}button{cursor:pointer;background:#3155ff;font-weight:800}button:disabled{opacity:.55}
+.score{font-size:26px;font-weight:900}.hot{color:#ff7043}.rare{color:#ffca28}.common{color:#b0bec5}
+.muted{color:#9aa8c9}.small{font-size:13px}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#263552;margin:4px 6px 0 0}
+.err{border-color:#7f1d1d;background:#2a1418}.ok{border-color:#1d5c37;background:#10261a}
+h1{margin:0 0 5px;font-size:42px}h2{margin:8px 0}
+@media(max-width:600px){body{padding:14px}h1{font-size:34px}input{width:100%;min-width:100%}button{flex:1}}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>✈ PlaneHunter v0.3</h1>
+<h1>✈ PlaneHunter v0.5</h1>
 <div class="muted">Live aircraft nearby → ranked by “worth looking up”.</div>
-
 <div class="card">
 <div class="row">
-<input id="lat" placeholder="Latitude" value="51.1133">
-<input id="lon" placeholder="Longitude" value="-0.1821">
-<input id="radius" type="number" value="40" min="5" max="150">
+<input id="lat" inputmode="decimal" placeholder="Latitude" value="51.11582">
+<input id="lon" inputmode="decimal" placeholder="Longitude" value="-0.22452">
+<input id="radius" inputmode="numeric" type="number" value="40" min="5" max="150">
 <button id="loc">Use my location</button>
 <button id="hunt">HUNT ✈</button>
 </div>
-<p class="muted small">Radius in km. The app uses its own server endpoint, so the browser no longer calls aircraft-data APIs directly.</p>
+<p class="muted small">Radius in km. Live data comes through the PlaneHunter server endpoint.</p>
 </div>
-
-<div id="status"></div>
-<div id="results"></div>
+<div id="status"></div><div id="results"></div>
 </div>
-
 <script>
-const specialCalls=[/BELUGA/i,/ANTONOV|ADB/i,/NASA/i,/RAF|RFR/i,/USAF|RCH/i,/C17/i,/A400/i];
-
-function hav(a,b,c,d){
- const R=6371,p=Math.PI/180,da=(c-a)*p,dl=(d-b)*p,
- x=Math.sin(da/2)**2+Math.cos(a*p)*Math.cos(c*p)*Math.sin(dl/2)**2;
- return 2*R*Math.asin(Math.sqrt(x));
-}
-function score(ac,dist){
- let s=10;
- const alt=ac.alt_m??0, call=(ac.callsign||'').trim();
- if(dist<10)s+=25; else if(dist<20)s+=18; else if(dist<35)s+=10;
- if(alt<3000)s+=20; else if(alt<7000)s+=12; else if(alt<12000)s+=5;
- if(specialCalls.some(r=>r.test(call)))s+=35;
- if(ac.vertical_ms!=null && Math.abs(ac.vertical_ms)>5)s+=5;
- return Math.min(99,s);
-}
-function label(s){return s>=80?['🔥 DROP EVERYTHING','hot']:s>=55?['⭐ INTERESTING','rare']:['COMMON','common']}
-
-document.getElementById('loc').onclick=()=>{
- if(!navigator.geolocation){alert('Geolocation not supported');return;}
- navigator.geolocation.getCurrentPosition(
-   p=>{lat.value=p.coords.latitude.toFixed(5);lon.value=p.coords.longitude.toFixed(5)},
-   e=>alert('Location unavailable: '+e.message),
-   {enableHighAccuracy:true,timeout:10000,maximumAge:60000}
- );
-};
-
-document.getElementById('hunt').onclick=async()=>{
- results.innerHTML='';
- status.innerHTML='<div class="card">Scanning…</div>';
- const la=+lat.value, lo=+lon.value, r=+radius.value;
- try{
-   const res=await fetch(`/api/aircraft?lat=${encodeURIComponent(la)}&lon=${encodeURIComponent(lo)}&radius=${encodeURIComponent(r)}`);
-   const data=await res.json();
-   if(!res.ok) throw new Error(data.error||('HTTP '+res.status));
-   let arr=(data.aircraft||[])
-     .filter(a=>a.lat!=null&&a.lon!=null)
-     .map(a=>({a,d:hav(la,lo,a.lat,a.lon)}))
-     .filter(x=>x.d<=r)
-     .map(x=>({...x,s:score(x.a,x.d)}))
-     .sort((x,y)=>y.s-x.s).slice(0,20);
-
-   status.innerHTML=`<div class="card ok"><b>${arr.length}</b> best targets shown • source: ${data.source||'unknown'} • ${new Date().toLocaleTimeString()}</div>`;
-   results.innerHTML=arr.map(x=>{
-      const a=x.a,[lab,cl]=label(x.s);
-      const call=(a.callsign||'UNKNOWN').trim()||'UNKNOWN';
-      const alt=a.alt_m!=null?Math.round(a.alt_m*3.28084).toLocaleString()+' ft':'—';
-      const spd=a.speed_ms!=null?Math.round(a.speed_ms*1.94384)+' kt':'—';
-      const vr=a.vertical_ms!=null?Math.round(a.vertical_ms*196.85)+' ft/min':'—';
-      return `<div class="card">
-        <div class="score ${cl}">${x.s}/100 · ${lab}</div>
-        <h2>${call}</h2>
-        <span class="pill">ICAO ${a.icao||'—'}</span>
-        <span class="pill">${x.d.toFixed(1)} km</span>
-        <span class="pill">${alt}</span>
-        <span class="pill">${spd}</span>
-        <p class="muted">Origin: ${a.country||'—'} · Track: ${a.track_deg!=null?Math.round(a.track_deg)+'°':'—'} · Vertical: ${vr}</p>
-      </div>`;
-   }).join('') || '<div class="card">No aircraft found in this radius right now.</div>';
- }catch(e){
-   status.innerHTML=`<div class="card err"><b>Could not fetch live data.</b><br>${e.message}</div>`;
- }
-};
+const specialTypes=new Set(["A388","A124","A225","BLCF","A3ST","C17","A400","B52","B1","B2","U2","AN12","IL76"]);
+const specialCalls=[/BELUGA/i,/ANTONOV|ADB/i,/NASA/i,/RAF|RFR/i,/USAF|RCH/i,/RRR/i,/NATO/i];
+function hav(a,b,c,d){const R=6371,p=Math.PI/180,da=(c-a)*p,dl=(d-b)*p;const x=Math.sin(da/2)**2+Math.cos(a*p)*Math.cos(c*p)*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+function score(ac,dist){let s=10;const alt=Number.isFinite(ac.alt_ft)?ac.alt_ft:50000,call=(ac.callsign||"").trim(),type=(ac.type||"").toUpperCase();
+if(dist<8)s+=25;else if(dist<15)s+=20;else if(dist<25)s+=13;else if(dist<40)s+=7;
+if(alt<5000)s+=20;else if(alt<12000)s+=14;else if(alt<22000)s+=8;else if(alt<32000)s+=3;
+if(specialTypes.has(type))s+=35;if(specialCalls.some(r=>r.test(call)))s+=30;if((ac.dbFlags||0)&1)s+=18;
+if(Number.isFinite(ac.vertical_fpm)&&Math.abs(ac.vertical_fpm)>1500)s+=5;return Math.min(99,s);}
+function label(s){return s>=80?["🔥 DROP EVERYTHING","hot"]:s>=55?["⭐ INTERESTING","rare"]:["COMMON","common"];}
+const lat=document.getElementById("lat"),lon=document.getElementById("lon"),radius=document.getElementById("radius"),status=document.getElementById("status"),results=document.getElementById("results"),hunt=document.getElementById("hunt");
+document.getElementById("loc").onclick=()=>{if(!navigator.geolocation){alert("Geolocation not supported");return;}
+navigator.geolocation.getCurrentPosition(p=>{lat.value=p.coords.latitude.toFixed(5);lon.value=p.coords.longitude.toFixed(5)},e=>alert("Location unavailable: "+e.message),{enableHighAccuracy:true,timeout:10000,maximumAge:30000});};
+hunt.onclick=async()=>{results.innerHTML="";status.innerHTML='<div class="card">Scanning…</div>';hunt.disabled=true;
+const la=Number(lat.value),lo=Number(lon.value),r=Number(radius.value);if(!Number.isFinite(la)||!Number.isFinite(lo)){status.innerHTML='<div class="card err">Invalid coordinates.</div>';hunt.disabled=false;return;}
+const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),10000);
+try{const res=await fetch(`/api/aircraft?lat=${encodeURIComponent(la)}&lon=${encodeURIComponent(lo)}&radius=${encodeURIComponent(r)}`,{signal:controller.signal,cache:"no-store"});
+const text=await res.text();let data;try{data=JSON.parse(text)}catch{throw new Error(`Server returned non-JSON response (${res.status})`)}
+if(!res.ok)throw new Error(data.error||`HTTP ${res.status}`);
+const arr=(data.aircraft||[]).filter(a=>Number.isFinite(a.lat)&&Number.isFinite(a.lon)).map(a=>({a,d:hav(la,lo,a.lat,a.lon)})).filter(x=>x.d<=r).map(x=>({...x,s:score(x.a,x.d)})).sort((x,y)=>y.s-x.s).slice(0,30);
+status.innerHTML=`<div class="card ok"><b>${arr.length}</b> targets • source: ${data.source||"unknown"} • ${new Date().toLocaleTimeString()}</div>`;
+results.innerHTML=arr.map(x=>{const a=x.a,[lab,cl]=label(x.s),call=(a.callsign||"UNKNOWN").trim()||"UNKNOWN",reg=a.registration||"—",type=a.type||"—";
+const alt=Number.isFinite(a.alt_ft)?Math.round(a.alt_ft).toLocaleString()+" ft":"—",spd=Number.isFinite(a.speed_kt)?Math.round(a.speed_kt)+" kt":"—",vr=Number.isFinite(a.vertical_fpm)?Math.round(a.vertical_fpm)+" ft/min":"—";
+return `<div class="card"><div class="score ${cl}">${x.s}/100 · ${lab}</div><h2>${call}</h2><span class="pill">${type}</span><span class="pill">${reg}</span><span class="pill">${x.d.toFixed(1)} km</span><span class="pill">${alt}</span><span class="pill">${spd}</span><p class="muted">ICAO: ${a.icao||"—"} · Track: ${Number.isFinite(a.track_deg)?Math.round(a.track_deg)+"°":"—"} · Vertical: ${vr}</p></div>`;}).join("")||'<div class="card">No aircraft found in this radius right now.</div>';
+}catch(e){const msg=e.name==="AbortError"?"Request timed out after 10 seconds":e.message;status.innerHTML=`<div class="card err"><b>Could not fetch live data.</b><br>${msg}</div>`;}
+finally{clearTimeout(timer);hunt.disabled=false;}};
 </script>
 </body>
 </html>
