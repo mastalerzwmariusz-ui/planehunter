@@ -1,60 +1,123 @@
 export default async function handler(req, res) {
+
+  // CORS + no-cache
+
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  res.setHeader("Cache-Control", "no-store");
+
   const lat = Number(req.query.lat);
+
   const lon = Number(req.query.lon);
-  const radius = Math.max(5, Math.min(150, Number(req.query.radius) || 40));
+
+  const radius = Math.max(
+
+    5,
+
+    Math.min(150, Number(req.query.radius) || 40)
+
+  );
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return res.status(400).json({ error: "Invalid latitude or longitude" });
+
+    return res.status(400).json({
+
+      error: "Invalid latitude or longitude"
+
+    });
+
   }
 
-  const dlat = radius / 111;
-  const dlon = radius / (111 * Math.cos(lat * Math.PI / 180));
+  // Convert radius to approximate bounding box
 
-  const lamin = lat - dlat;
-  const lamax = lat + dlat;
-  const lomin = lon - dlon;
-  const lomax = lon + dlon;
+  const dLat = radius / 111;
+
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+
+  const dLon = radius / (111 * Math.max(0.1, Math.abs(cosLat)));
+
+  const lamin = lat - dLat;
+
+  const lamax = lat + dLat;
+
+  const lomin = lon - dLon;
+
+  const lomax = lon + dLon;
 
   const url =
-    `https://opensky-network.org/api/states/all` +
-    `?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`;
+
+    "https://opensky-network.org/api/states/all" +
+
+    `?lamin=${encodeURIComponent(lamin)}` +
+
+    `&lomin=${encodeURIComponent(lomin)}` +
+
+    `&lamax=${encodeURIComponent(lamax)}` +
+
+    `&lomax=${encodeURIComponent(lomax)}`;
 
   try {
-    const r = await fetch(url, {
+
+    const response = await fetch(url, {
+
       headers: {
-        "User-Agent": "PlaneHunter-Prototype"
+
+        "User-Agent": "PlaneHunter/0.5",
+
+        "Accept": "application/json"
+
       },
+
       cache: "no-store"
+
     });
 
-    if (!r.ok) {
-      throw new Error(`OpenSky HTTP ${r.status}`);
+    if (!response.ok) {
+
+      const body = await response.text();
+
+      return res.status(502).json({
+
+        error: "Aircraft data provider error",
+
+        providerStatus: response.status,
+
+        details: body.slice(0, 300)
+
+      });
+
     }
 
-    const j = await r.json();
+    const data = await response.json();
 
-    const aircraft = (j.states || []).map(a => ({
-      icao: a[0],
-      callsign: (a[1] || "").trim(),
-      country: a[2],
-      lon: a[5],
-      lat: a[6],
-      alt_m: a[7] ?? a[13],
-      on_ground: a[8],
-      speed_ms: a[9],
-      track_deg: a[10],
-      vertical_ms: a[11]
-    }));
+    const states = Array.isArray(data.states)
+
+      ? data.states
+
+      : [];
 
     return res.status(200).json({
-      source: "OpenSky",
-      count: aircraft.length,
-      aircraft
+
+      ok: true,
+
+      time: data.time || null,
+
+      count: states.length,
+
+      states
+
     });
 
-  } catch (e) {
-    return res.status(502).json({
-      error: e.message
+  } catch (error) {
+
+    return res.status(500).json({
+
+      error: "Unable to fetch aircraft data",
+
+      details: String(error?.message || error)
+
     });
+
   }
+
 }
